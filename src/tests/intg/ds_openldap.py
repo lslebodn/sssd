@@ -185,26 +185,13 @@ class DSOpenLDAP(DS):
         db_config_file.write(db_config)
         db_config_file.close()
 
-    def setup(self):
-        """Setup the instance."""
-        ldapi_socket = self.run_dir + "/ldapi"
-        ldapi_url = "ldapi://" + url_quote(ldapi_socket, "")
-        url_list = ldapi_url + " " + self.ldap_url
-
-        os.makedirs(self.conf_slapd_d_dir)
-        os.makedirs(self.run_dir)
-        os.makedirs(self.data_dir)
-
-        #
-        # Setup initial configuration
-        #
-        self._setup_config()
-
         #
         # Start the daemon
         #
+    def _start_daemon(self):
+
         if subprocess.call(["slapd", "-F", self.conf_slapd_d_dir,
-                            "-h", url_list]) != 0:
+                            "-h", self.url_list]) != 0:
             raise Exception("Failed to start slapd")
 
         #
@@ -213,7 +200,7 @@ class DSOpenLDAP(DS):
         attempt = 0
         while True:
             try:
-                ldap_conn = ldap.initialize(ldapi_url)
+                ldap_conn = ldap.initialize(self.ldapi_url)
                 ldap_conn.simple_bind_s(self.admin_rdn + ",cn=config",
                                         self.admin_pw)
                 ldap_conn.unbind_s()
@@ -231,6 +218,29 @@ class DSOpenLDAP(DS):
         #
         # Relax requirement of member attribute presence in groupOfNames
         #
+    def setup(self):
+        """Setup the instance."""
+        ldapi_socket = self.run_dir + "/ldapi"
+        self.ldapi_url = "ldapi://" + url_quote(ldapi_socket, "")
+        self.url_list = self.ldapi_url + " " + self.ldap_url
+
+        os.makedirs(self.conf_slapd_d_dir)
+        os.makedirs(self.run_dir)
+        os.makedirs(self.data_dir)
+
+        #
+        # Setup initial configuration
+        #
+        self._setup_config()
+
+        #
+        # Start the daemon
+        #
+        self._start_daemon()
+
+        #
+        # Relax requirement of member attribute presence in groupOfNames
+        #
         modlist = [
             (ldap.MOD_DELETE, "olcObjectClasses",
              b"{7}( 2.5.6.9 NAME 'groupOfNames' "
@@ -243,7 +253,7 @@ class DSOpenLDAP(DS):
              b"STRUCTURAL MUST ( cn ) MAY ( member $ businessCategory $ "
              b"seeAlso $ owner $ ou $ o $ description ) )"),
         ]
-        ldap_conn = ldap.initialize(ldapi_url)
+        ldap_conn = ldap.initialize(self.ldapi_url)
         ldap_conn.simple_bind_s(self.admin_rdn + ",cn=config", self.admin_pw)
         ldap_conn.modify_s("cn={0}core,cn=schema,cn=config", modlist)
         ldap_conn.unbind_s()
@@ -266,8 +276,7 @@ class DSOpenLDAP(DS):
             ])
         ldap_conn.unbind_s()
 
-    def teardown(self):
-        """Teardown the instance."""
+    def _stop_daemon(self):
         # Wait for slapd to stop
         try:
             pid_file = open(self.pid_path, "r")
@@ -284,6 +293,10 @@ class DSOpenLDAP(DS):
         except IOError as e:
             if e.errno != errno.ENOENT:
                 raise
+
+    def teardown(self):
+        """Teardown the instance."""
+        self._stop_daemon()
 
         for path in (self.conf_slapd_d_dir, self.run_dir, self.data_dir):
             shutil.rmtree(path, True)

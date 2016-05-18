@@ -30,6 +30,10 @@ dist_noinst_DATA = \
     kdc.py \
     krb5utils.py \
     test_kcm.py \
+    data/ad_data.ldif \
+    data/ad_schema.ldif \
+    ad_test.py \
+    fake_ad.py \
     $(NULL)
 
 config.py: config.py.m4
