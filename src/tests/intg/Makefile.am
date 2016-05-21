@@ -48,6 +48,10 @@ config.py: config.py.m4
 	   -D "runstatedir=\`$(runstatedir)'" \
 	   -D "abs_builddir=\`$(abs_builddir)'" \
 	   -D "session_recording_shell=\`$(session_recording_shell)'" \
+	   -D "py2execdir=\`$(py2execdir)'" \
+	   -D "py3execdir=\`$(py3execdir)'" \
+	   -D "python2dir=\`$(python2dir)'" \
+	   -D "python3dir=\`$(python3dir)'" \
 	   $< > $@
 
 root:
@@ -61,12 +65,25 @@ passwd: root
 group:
 	echo "root:x:0:" > $@
 
+python_cwrap_binaries:
+	echo "#!/bin/bash" >$(DESTDIR)$(bindir)/python2
+	echo "export PYTHONPATH=\"$(py2execdir):$(python2dir):$$PYTHONPATH\"" \
+		>>$(DESTDIR)$(bindir)/python2
+	echo "exec /usr/bin/python2" >>$(DESTDIR)$(bindir)/python2
+	chmod +x $(DESTDIR)$(bindir)/python2
+	echo "#!/bin/bash" >$(DESTDIR)$(bindir)/python3
+	echo "export PYTHONPATH=\"$(py3execdir):$(python3dir):$$PYTHONPATH\"" \
+		>>$(DESTDIR)$(bindir)/python3
+	echo "exec /usr/bin/python3" >>$(DESTDIR)$(bindir)/python3
+	chmod +x $(DESTDIR)$(bindir)/python3
+	ln -s $(DESTDIR)$(bindir)/python2 $(DESTDIR)$(bindir)/python
+
 CLEANFILES=config.py config.pyc passwd group
 
 clean-local:
 	rm -Rf root
 
-intgcheck-installed: config.py passwd group
+intgcheck-installed: config.py passwd group python_cwrap_binaries
 	pipepath="$(DESTDIR)$(pipepath)"; \
 	if test $${#pipepath} -gt 80; then \
 	    echo "error: Pipe directory path too long," \
