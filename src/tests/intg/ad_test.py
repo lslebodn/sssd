@@ -33,8 +33,20 @@ import ldap_ent
 import fake_ad
 from util import *
 
+if sys.version_info[0] > 2:
+    LOCAL_PYEXECDIR = config.PY3EXECDIR
+    LOCAL_PYDIR = config.PY3DIR
+else:
+    LOCAL_PYEXECDIR = config.PY2EXECDIR
+    LOCAL_PYDIR = config.PY2DIR
+
+for path in [LOCAL_PYEXECDIR, LOCAL_PYDIR]:
+   if path not in sys.path:
+       sys.path.insert(0, path)
+
+import pysss_nss_idmap
+
 LDAP_BASE_DN = "dc=example,dc=com"
-INTERACTIVE_TIMEOUT = 4
 
 
 @pytest.fixture(scope="module")
@@ -95,55 +107,35 @@ def create_ldap_fixture(request, ldap_conn, ent_list=None):
     create_ldap_cleanup(request, ldap_conn, ent_list)
 
 
-SCHEMA_RFC2307 = "rfc2307"
-SCHEMA_RFC2307_BIS = "rfc2307bis"
-
-
-def format_basic_conf(ldap_conn, schema, enum):
+def format_basic_conf(ldap_conn):
     """Format a basic SSSD configuration"""
-    schema_conf = "ldap_schema         = " + schema + "\n"
-    if schema == SCHEMA_RFC2307_BIS:
-        schema_conf += "ldap_group_object_class = groupOfNames\n"
     return unindent("""\
         [sssd]
-        debug_level         = 0xffff
-        domains             = LDAP
-        services            = nss, pam
+        domains = FakeAD
+        services = nss
 
         [nss]
-        debug_level         = 0xffff
-        memcache_timeout    = 0
 
         [pam]
-        debug_level         = 0xffff
 
-        [domain/LDAP]
-        ldap_auth_disable_tls_never_use_in_production = true
-        debug_level         = 0xffff
-        enumerate           = {enum}
-        {schema_conf}
-        id_provider         = ldap
-        auth_provider       = ldap
-        ldap_uri            = {ldap_conn.ds_inst.ldap_url}
-        ldap_search_base    = {ldap_conn.ds_inst.base_dn}
+        [domain/FakeAD]
+        ldap_search_base = {ldap_conn.ds_inst.base_dn}
+        ldap_referrals = false
+
+        id_provider = ldap
+        auth_provider = ldap
+        chpass_provider = ldap
+        access_provider = ldap
+
+        ldap_uri = {ldap_conn.ds_inst.ldap_url}
+        ldap_default_bind_dn = {ldap_conn.ds_inst.admin_dn}
+        ldap_default_authtok_type = password
+        ldap_default_authtok = {ldap_conn.ds_inst.admin_pw}
+
+        ldap_schema = ad
+        ldap_id_mapping = true
+        ldap_idmap_default_domain_sid = S-1-5-21-1305200397-2901131868-73388776
     """).format(**locals())
-
-
-def format_interactive_conf(ldap_conn, schema):
-    """Format an SSSD configuration with all caches refreshing in 4 seconds"""
-    return \
-        format_basic_conf(ldap_conn, schema, enum=True) + \
-        unindent("""
-            [nss]
-            memcache_timeout                    = 0
-            enum_cache_timeout                  = {0}
-            entry_negative_timeout              = 0
-
-            [domain/LDAP]
-            ldap_enumeration_refresh_timeout    = {0}
-            ldap_purge_cache_timeout            = 1
-            entry_cache_timeout                 = {0}
-        """).format(INTERACTIVE_TIMEOUT)
 
 
 def create_conf_file(contents):
@@ -211,59 +203,56 @@ def create_sssd_fixture(request):
 
 
 @pytest.fixture
-def sanity_rfc2307(request, ldap_conn):
-    ent_list = ldap_ent.List(ldap_conn.ds_inst.base_dn)
-    create_ldap_fixture(request, ldap_conn, ent_list)
+def simple_ad(request, ldap_conn):
+    create_ldap_fixture(request, ldap_conn)
 
-    conf = format_basic_conf(ldap_conn, SCHEMA_RFC2307, enum=True)
+    conf = format_basic_conf(ldap_conn)
+
+    # Set domainID for fake AD domain
+    sssd_cache_ldif = unindent("""\
+        dn: cn=sysdb
+        cn: sysdb
+        description: base object
+        version: 0.17
+        distinguishedName: cn=sysdb
+
+        dn: cn=FakeAD,cn=sysdb
+        cn: FakeAD
+        domainID: S-1-5-21-1305200397-2901131868-73388776
+        distinguishedName: cn=FakeAD,cn=sysdb
+    """)
+    sssd_cache = config.DB_PATH + "cache_FakeAD.ldb"
+
+    ldbadd = subprocess.Popen(
+        ["ldbadd", "-H", config.DB_PATH + "/cache_FakeAD.ldb"],
+        stdin=subprocess.PIPE, close_fds=True
+    )
+    ldbadd.communicate(sssd_cache_ldif)
+    if ldbadd.returncode != 0:
+        raise Exception("Failed to import initila data with ldbadd")
+
     create_conf_fixture(request, conf)
     create_sssd_fixture(request)
     return None
 
 
-@pytest.fixture
-def simple_rfc2307(request, ldap_conn):
-    ent_list = ldap_ent.List(ldap_conn.ds_inst.base_dn)
-    create_ldap_fixture(request, ldap_conn, ent_list)
-    conf = format_basic_conf(ldap_conn, SCHEMA_RFC2307, enum=False)
-    create_conf_fixture(request, conf)
-    create_sssd_fixture(request)
-    return None
+def test_regression_ticket2163(ldap_conn, simple_ad):
+    user = 'user1_dom1-19661'
+    user_id = pwd.getpwnam(user).pw_uid
+    user_sid = 'S-1-5-21-1305200397-2901131868-73388776-82809'
 
+    output = pysss_nss_idmap.getsidbyname(user)[user]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_USER
+    assert output[pysss_nss_idmap.SID_KEY] == user_sid
 
-@pytest.fixture
-def sanity_rfc2307_bis(request, ldap_conn):
-    ent_list = ldap_ent.List(ldap_conn.ds_inst.base_dn)
-    ent_list.add_user("user1", 1001, 2001)
-    ent_list.add_user("user2", 1002, 2002)
-    ent_list.add_user("user3", 1003, 2003)
+    output = pysss_nss_idmap.getsidbyid(user_id)[user_id]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_USER
+    assert output[pysss_nss_idmap.SID_KEY] == user_sid
 
-    ent_list.add_group_bis("group1", 2001)
-    ent_list.add_group_bis("group2", 2002)
-    ent_list.add_group_bis("group3", 2003)
+    output = pysss_nss_idmap.getidbysid(user_sid)[user_sid]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_USER
+    assert output[pysss_nss_idmap.ID_KEY] == user_id
 
-    ent_list.add_group_bis("empty_group1", 2010)
-    ent_list.add_group_bis("empty_group2", 2011)
-
-    ent_list.add_group_bis("two_user_group", 2012, ["user1", "user2"])
-    ent_list.add_group_bis("group_empty_group", 2013, [], ["empty_group1"])
-    ent_list.add_group_bis("group_two_empty_groups", 2014,
-                           [], ["empty_group1", "empty_group2"])
-    ent_list.add_group_bis("one_user_group1", 2015, ["user1"])
-    ent_list.add_group_bis("one_user_group2", 2016, ["user2"])
-    ent_list.add_group_bis("group_one_user_group", 2017,
-                           [], ["one_user_group1"])
-    ent_list.add_group_bis("group_two_user_group", 2018,
-                           [], ["two_user_group"])
-    ent_list.add_group_bis("group_two_one_user_groups", 2019,
-                           [], ["one_user_group1", "one_user_group2"])
-
-    create_ldap_fixture(request, ldap_conn, ent_list)
-    conf = format_basic_conf(ldap_conn, SCHEMA_RFC2307_BIS, enum=True)
-    create_conf_fixture(request, conf)
-    create_sssd_fixture(request)
-    return None
-
-
-def test_regression_ticket2163(ldap_conn, simple_rfc2307):
-    assert True
+    output = pysss_nss_idmap.getnamebysid(user_sid)[user_sid]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_USER
+    assert output[pysss_nss_idmap.NAME_KEY] == user
