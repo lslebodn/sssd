@@ -56,18 +56,26 @@ struct cache_req {
     time_t req_start;
 };
 
+struct cache_req_name {
+    const char *input;  /* Original input. */
+    const char *name;   /* Parsed name or UPN. */
+    const char *lookup; /* Converted per domain rules. */
+};
+
 /* Input data. */
 struct cache_req_data {
     enum cache_req_type type;
-    struct {
-        const char *input;  /* Original input. */
-        const char *name;   /* Parsed name or UPN. */
-        const char *lookup; /* Converted per domain rules. */
-    } name;
+    struct cache_req_name name;
     uint32_t id;
     const char *cert;
     const char *sid;
     const char **attrs;
+
+    struct {
+        struct cache_req_name *name;
+        const char *protocol;
+        uint16_t port;
+    } svc;
 };
 
 struct tevent_req *
