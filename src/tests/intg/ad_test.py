@@ -135,6 +135,7 @@ def format_basic_conf(ldap_conn):
         ldap_schema = ad
         ldap_id_mapping = true
         ldap_idmap_default_domain_sid = S-1-5-21-1305200397-2901131868-73388776
+        case_sensitive = False
     """).format(**locals())
 
 
@@ -291,6 +292,8 @@ def test_group_operations2(ldap_conn, simple_ad):
     user_id = pwd.getpwnam(user).pw_uid
     user_sid = 'S-1-5-21-1305200397-2901131868-73388776-82809'
 
+    # it will fail with case insensitive domain
+    # https://fedorahosted.org/sssd/ticket/3284
     output = pysss_nss_idmap.getsidbyname(group)[group]
     assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
     assert output[pysss_nss_idmap.SID_KEY] == group_sid
@@ -305,4 +308,4 @@ def test_group_operations2(ldap_conn, simple_ad):
 
     output = pysss_nss_idmap.getnamebysid(group_sid)[group_sid]
     assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
-    assert output[pysss_nss_idmap.NAME_KEY] == group
+    assert output[pysss_nss_idmap.NAME_KEY] == group.lower()
