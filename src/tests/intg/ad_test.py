@@ -256,3 +256,53 @@ def test_regression_ticket2163(ldap_conn, simple_ad):
     output = pysss_nss_idmap.getnamebysid(user_sid)[user_sid]
     assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_USER
     assert output[pysss_nss_idmap.NAME_KEY] == user
+
+
+def test_group_operations(ldap_conn, simple_ad):
+    group = 'group3_dom1-17775'
+    group_id = grp.getgrnam(group).gr_gid
+    group_sid = 'S-1-5-21-1305200397-2901131868-73388776-82764'
+
+    output = pysss_nss_idmap.getsidbyname(group)[group]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.SID_KEY] == group_sid
+
+    output = pysss_nss_idmap.getsidbyid(group_id)[group_id]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.SID_KEY] == group_sid
+
+    output = pysss_nss_idmap.getidbysid(group_sid)[group_sid]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.ID_KEY] == group_id
+
+    output = pysss_nss_idmap.getnamebysid(group_sid)[group_sid]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.NAME_KEY] == group
+
+
+def test_group_operations2(ldap_conn, simple_ad):
+    # https://fedorahosted.org/sssd/ticket/3283
+    # resolve group and also member of this group
+    group = 'Domain Users'
+    group_id = grp.getgrnam(group).gr_gid
+    group_sid = 'S-1-5-21-1305200397-2901131868-73388776-513'
+
+    user = 'user1_dom1-19661'
+    user_id = pwd.getpwnam(user).pw_uid
+    user_sid = 'S-1-5-21-1305200397-2901131868-73388776-82809'
+
+    output = pysss_nss_idmap.getsidbyname(group)[group]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.SID_KEY] == group_sid
+
+    output = pysss_nss_idmap.getsidbyid(group_id)[group_id]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.SID_KEY] == group_sid
+
+    output = pysss_nss_idmap.getidbysid(group_sid)[group_sid]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.ID_KEY] == group_id
+
+    output = pysss_nss_idmap.getnamebysid(group_sid)[group_sid]
+    assert output[pysss_nss_idmap.TYPE_KEY] == pysss_nss_idmap.ID_GROUP
+    assert output[pysss_nss_idmap.NAME_KEY] == group
