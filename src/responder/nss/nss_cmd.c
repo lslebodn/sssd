@@ -949,7 +949,7 @@ static errno_t nss_cmd_getsidbyname(struct cli_ctx *cli_ctx)
 
 static errno_t nss_cmd_getsidbyid(struct cli_ctx *cli_ctx)
 {
-    const char *attrs[] = { SYSDB_SID_STR, NULL };
+    const char *attrs[] = { SYSDB_SID_STR, ORIGINALAD_PREFIX SYSDB_NAME, SYSDB_NAME, NULL };
 
     return nss_getby_id(cli_ctx, CACHE_REQ_OBJECT_BY_ID, attrs,
                         SSS_MC_NONE, nss_protocol_fill_sid);
