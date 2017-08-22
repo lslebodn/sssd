@@ -40,14 +40,10 @@
 
 /* connect to server using socket */
 static int
-connect_socket(int family, struct sockaddr *addr, size_t addr_len)
+connect_socket(int family, struct sockaddr *addr, size_t addr_len, int *sd)
 {
     int flags;
     int sock = -1;
-    struct pollfd fds[2];
-    char buffer[BUFFER_SIZE];
-    int i;
-    ssize_t res;
     int ret;
 
     /* set O_NONBLOCK on standard input */
@@ -84,6 +80,22 @@ connect_socket(int family, struct sockaddr *addr, size_t addr_len)
                 ret, strerror(ret));
         goto done;
     }
+
+    *sd = sock;
+
+done:
+    if (ret != 0 && sock >= 0) close(sock);
+    return ret;
+}
+
+static int proxy_data(int sock)
+{
+    int flags;
+    struct pollfd fds[2];
+    char buffer[BUFFER_SIZE];
+    int i;
+    ssize_t res;
+    int ret;
 
     /* set O_NONBLOCK on the socket */
     flags = fcntl(sock, F_GETFL);
@@ -158,8 +170,7 @@ connect_socket(int family, struct sockaddr *addr, size_t addr_len)
     }
 
 done:
-    if (sock >= 0) close(sock);
-
+    close(sock);
     return ret;
 }
 
@@ -268,10 +279,10 @@ int main(int argc, const char **argv)
             DEBUG(SSSDBG_OP_FAILURE,
                   "getaddrinfo() failed (%d): %s\n", ret, gai_strerror(ret));
         } else {
-            host = ai[0].ai_canonname;
+            host = ai->ai_canonname;
         }
     } else {
-        ret = getnameinfo(ai[0].ai_addr, ai[0].ai_addrlen,
+        ret = getnameinfo(ai->ai_addr, ai->ai_addrlen,
                           canonhost, NI_MAXHOST, NULL, 0, NI_NAMEREQD);
         if (ret) {
             DEBUG(SSSDBG_OP_FAILURE,
@@ -295,7 +306,16 @@ int main(int argc, const char **argv)
     if (pc_args) {
         ret = connect_proxy_command(discard_const(pc_args));
     } else if (ai) {
-        ret = connect_socket(ai[0].ai_family, ai[0].ai_addr, ai[0].ai_addrlen);
+        /* Try all IP addresses before giving up */
+        for (struct addrinfo *ti = ai; ti != NULL; ti = ti->ai_next) {
+            int socket_descriptor = -1;
+            ret = connect_socket(ti->ai_family, ti->ai_addr, ti->ai_addrlen,
+                                 &socket_descriptor);
+            if (ret == 0) {
+                ret = proxy_data(socket_descriptor);
+                break;
+            }
+        }
     } else {
         ret = EFAULT;
     }

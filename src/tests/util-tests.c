@@ -30,10 +30,11 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <arpa/inet.h>
 
 #include "util/util.h"
 #include "util/sss_utf8.h"
-#include "util/murmurhash3.h"
+#include "shared/murmurhash3.h"
 #include "tests/common_check.h"
 
 #define FILENAME_TEMPLATE "tests-atomicio-XXXXXX"

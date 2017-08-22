@@ -62,7 +62,6 @@ struct err_string error_to_str[] = {
     { "Cannot parse input" }, /* ERR_INPUT_PARSE */
     { "Entry not found" }, /* ERR_NOT_FOUND */
     { "Domain not found" }, /* ERR_DOMAIN_NOT_FOUND */
-    { "Missing configuration file" }, /* ERR_MISSING_CONF */
     { "Malformed search filter" }, /* ERR_INVALID_FILTER, */
     { "No POSIX attributes detected" }, /* ERR_NO_POSIX */
     { "Extra attribute is a duplicate" }, /* ERR_DUP_EXTRA_ATTR */
@@ -75,6 +74,7 @@ struct err_string error_to_str[] = {
     { "Cannot connect to system bus" }, /* ERR_NO_SYSBUS */
     { "LDAP search returned a referral" }, /* ERR_REFERRAL */
     { "Error setting SELinux user context" }, /* ERR_SELINUX_CONTEXT */
+    { "SELinux is not managed by libsemanage" }, /* ERR_SELINUX_NOT_MANAGED */
     { "Username format not allowed by re_expression" }, /* ERR_REGEX_NOMATCH */
     { "Time specification not supported" }, /* ERR_TIMESPEC_NOT_SUPPORTED */
     { "Invalid SSSD configuration detected" }, /* ERR_INVALID_CONFIG */

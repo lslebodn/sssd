@@ -26,6 +26,7 @@
 #include "util/util.h"
 #include "responder/common/responder.h"
 #include "responder/common/cache_req/cache_req_private.h"
+#include "responder/common/cache_req/cache_req_private.h"
 #include "responder/common/cache_req/cache_req_plugin.h"
 
 static const struct cache_req_plugin *
@@ -480,7 +481,7 @@ static errno_t cache_req_search_domains_next(struct tevent_req *req)
          * qualified names on domain less search. We do not descend into
          * subdomains here since those are implicitly qualified.
          */
-        if (state->check_next && !allow_no_fqn && domain->fqnames) {
+        if (state->check_next && !allow_no_fqn && state->cr_domain->fqnames) {
             state->cr_domain = state->cr_domain->next;
             continue;
         }
@@ -614,7 +615,8 @@ done:
 static errno_t
 cache_req_search_domains_recv(TALLOC_CTX *mem_ctx,
                               struct tevent_req *req,
-                              struct cache_req_result ***_results)
+                              struct cache_req_result ***_results,
+                              size_t *_num_results)
 {
     struct cache_req_search_domains_state *state;
 
@@ -624,6 +626,9 @@ cache_req_search_domains_recv(TALLOC_CTX *mem_ctx,
 
     if (_results != NULL) {
         *_results = talloc_steal(mem_ctx, state->results);
+    }
+    if (_num_results != NULL) {
+        *_num_results = state->num_results;
     }
 
     return EOK;
@@ -698,6 +703,13 @@ static errno_t cache_req_process_input(TALLOC_CTX *mem_ctx,
                                        struct cache_req *cr,
                                        const char *domain);
 
+static errno_t cache_req_update_domains(TALLOC_CTX *mem_ctx,
+                                        struct tevent_req *req,
+                                        struct cache_req *cr,
+                                        const char *domain);
+
+static void cache_req_domains_updated(struct tevent_req *subreq);
+
 static void cache_req_input_parsed(struct tevent_req *subreq);
 
 static errno_t cache_req_select_domains(struct tevent_req *req,
@@ -709,6 +721,8 @@ cache_req_search_domains(struct tevent_req *req,
                          bool check_next,
                          bool bypass_cache,
                          bool bypass_dp);
+
+static void cache_req_process_result(struct tevent_req *subreq);
 
 static void cache_req_done(struct tevent_req *subreq);
 
@@ -753,13 +767,13 @@ struct tevent_req *cache_req_send(TALLOC_CTX *mem_ctx,
         goto done;
     }
 
+    state->domain_name = domain;
     ret = cache_req_process_input(state, req, cr, domain);
     if (ret != EOK) {
         goto done;
     }
 
-    state->domain_name = domain;
-    ret = cache_req_select_domains(req, domain);
+    ret = cache_req_select_domains(req, state->domain_name);
 
 done:
     if (ret == EOK) {
@@ -780,14 +794,25 @@ static errno_t cache_req_process_input(TALLOC_CTX *mem_ctx,
 {
     struct tevent_req *subreq;
     const char *default_domain;
+    errno_t ret;
 
     if (cr->data->name.input == NULL) {
-        /* Input was not name, there is no need to process it further. */
-        return EOK;
+        /* Call cache_req_update_domains() in order to get a up to date list
+         * of domains and subdomains, if needed. Otherwise just return EOK as
+         * the input was not a name, thus there's no need to process it
+         * further. */
+        return cache_req_update_domains(mem_ctx, req, cr, domain);
     }
 
     if (cr->plugin->parse_name == false || domain != NULL) {
-        /* We do not want to parse the name. */
+        /* Call cache_req_update_domains() in order to get a up to date list
+         * of domains and subdomains, if needed. Otherwise, just use the input
+         * name as it is. */
+        ret = cache_req_update_domains(mem_ctx, req, cr, domain);
+        if (ret != EOK) {
+            return ret;
+        }
+
         return cache_req_set_name(cr, cr->data->name.input);
     }
 
@@ -810,6 +835,64 @@ static errno_t cache_req_process_input(TALLOC_CTX *mem_ctx,
     tevent_req_set_callback(subreq, cache_req_input_parsed, req);
 
     return EAGAIN;
+}
+
+static errno_t cache_req_update_domains(TALLOC_CTX *mem_ctx,
+                                        struct tevent_req *req,
+                                        struct cache_req *cr,
+                                        const char *domain)
+{
+    struct tevent_req *subreq;
+
+    if (cr->rctx->get_domains_last_call.tv_sec != 0) {
+        return EOK;
+    }
+
+    subreq = sss_dp_get_domains_send(mem_ctx, cr->rctx, false, domain);
+    if (subreq == NULL) {
+        return ENOMEM;
+    }
+
+    tevent_req_set_callback(subreq, cache_req_domains_updated, req);
+    return EAGAIN;
+}
+
+static void cache_req_domains_updated(struct tevent_req *subreq)
+{
+    struct tevent_req *req;
+    struct cache_req_state *state;
+    errno_t ret;
+
+    req = tevent_req_callback_data(subreq, struct tevent_req);
+    state = tevent_req_data(req, struct cache_req_state);
+
+    ret = sss_dp_get_domains_recv(subreq);
+    talloc_free(subreq);
+    if (ret != EOK) {
+        goto done;
+    }
+
+    if (state->cr->data->name.input == NULL) {
+        /* Input was not name, there is no need to process it further. */
+        goto immediately;
+    }
+
+    if (state->cr->plugin->parse_name == false || state->domain_name != NULL) {
+        /* We do not want to parse the name. */
+        ret = cache_req_set_name(state->cr, state->cr->data->name.input);
+        if (ret != EOK) {
+            goto done;
+        }
+    }
+
+immediately:
+    ret = cache_req_select_domains(req, state->domain_name);
+
+done:
+    if (ret != EOK && ret != EAGAIN) {
+        tevent_req_error(req, ret);
+        return;
+    }
 }
 
 static void cache_req_input_parsed(struct tevent_req *subreq)
@@ -921,11 +1004,11 @@ cache_req_search_domains(struct tevent_req *req,
         return ENOMEM;
     }
 
-    tevent_req_set_callback(subreq, cache_req_done, req);
+    tevent_req_set_callback(subreq, cache_req_process_result, req);
     return EAGAIN;
 }
 
-static void cache_req_done(struct tevent_req *subreq)
+static void cache_req_process_result(struct tevent_req *subreq)
 {
     struct cache_req_state *state;
     struct tevent_req *req;
@@ -934,7 +1017,8 @@ static void cache_req_done(struct tevent_req *subreq)
     req = tevent_req_callback_data(subreq, struct tevent_req);
     state = tevent_req_data(req, struct cache_req_state);
 
-    ret = cache_req_search_domains_recv(state, subreq, &state->results);
+    ret = cache_req_search_domains_recv(state, subreq,
+                                        &state->results, &state->num_results);
     talloc_zfree(subreq);
 
     if (ret == ENOENT && state->first_iteration) {
@@ -959,11 +1043,23 @@ static void cache_req_done(struct tevent_req *subreq)
         }
     }
 
+    /* Overlay each result with session recording flag */
+    if (ret == EOK) {
+        subreq = cache_req_sr_overlay_send(state, state->ev, state->cr,
+                                           state->results,
+                                           state->num_results);
+        if (subreq == NULL) {
+            CACHE_REQ_DEBUG(SSSDBG_CRIT_FAILURE, state->cr,
+                            "Failed creating a session recording "
+                            "overlay request\n");
+            ret = ENOMEM;
+        } else {
+            tevent_req_set_callback(subreq, cache_req_done, req);
+            ret = EAGAIN;
+        }
+    }
+
     switch (ret) {
-    case EOK:
-        CACHE_REQ_DEBUG(SSSDBG_TRACE_FUNC, state->cr, "Finished: Success\n");
-        tevent_req_done(req);
-        break;
     case EAGAIN:
         break;
     case ENOENT:
@@ -978,6 +1074,30 @@ static void cache_req_done(struct tevent_req *subreq)
     }
 
     return;
+}
+
+static void cache_req_done(struct tevent_req *subreq)
+{
+    struct cache_req_state *state;
+    struct tevent_req *req;
+    errno_t ret;
+
+    req = tevent_req_callback_data(subreq, struct tevent_req);
+    state = tevent_req_data(req, struct cache_req_state);
+    ret = cache_req_sr_overlay_recv(subreq);
+    talloc_zfree(subreq);
+
+    switch (ret) {
+    case EOK:
+        CACHE_REQ_DEBUG(SSSDBG_TRACE_FUNC, state->cr, "Finished: Success\n");
+        tevent_req_done(req);
+        break;
+    default:
+        CACHE_REQ_DEBUG(SSSDBG_TRACE_FUNC, state->cr,
+                        "Finished: Error %d: %s\n", ret, sss_strerror(ret));
+        tevent_req_error(req, ret);
+        break;
+    }
 }
 
 errno_t cache_req_recv(TALLOC_CTX *mem_ctx,

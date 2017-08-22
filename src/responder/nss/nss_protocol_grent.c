@@ -41,7 +41,7 @@ nss_get_grent(TALLOC_CTX *mem_ctx,
     }
 
     /* Get fields. */
-    name = nss_get_name_from_msg(domain, msg);
+    name = sss_get_name_from_msg(domain, msg);
     gid = sss_view_ldb_msg_find_attr_as_uint64(domain, msg, SYSDB_GIDNUM, 0);
 
     if (name == NULL || gid == 0) {
@@ -163,7 +163,7 @@ nss_protocol_fill_members(struct sss_packet *packet,
                 }
             }
 
-            ret = sized_member_name(tmp_ctx, rctx, member_name, &name);
+            ret = sized_domain_name(tmp_ctx, rctx, member_name, &name);
             if (ret != EOK) {
                 DEBUG(SSSDBG_OP_FAILURE, "Unable to get sized name [%d]: %s\n",
                       ret, sss_strerror(ret));
@@ -239,18 +239,6 @@ nss_protocol_fill_grent(struct nss_ctx *nss_ctx,
                             &gid, &name);
         if (ret != EOK) {
             continue;
-        }
-
-        /* Check negative cache during enumeration. */
-        if (cmd_ctx->enumeration) {
-            ret = sss_ncache_check_group(nss_ctx->rctx->ncache,
-                                         result->domain, name->str);
-            if (ret == EEXIST) {
-                DEBUG(SSSDBG_TRACE_FUNC,
-                      "User [%s] filtered out! (negative cache)\n",
-                      name->str);
-                continue;
-            }
         }
 
         /* Adjust packet size: gid, num_members + string fields. */

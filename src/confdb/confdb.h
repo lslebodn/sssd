@@ -139,6 +139,8 @@
 #define CONFDB_DEFAULT_SUDO_TIMED false
 #define CONFDB_SUDO_INVERSE_ORDER "sudo_inverse_order"
 #define CONFDB_DEFAULT_SUDO_INVERSE_ORDER false
+#define CONFDB_SUDO_THRESHOLD "sudo_threshold"
+#define CONFDB_DEFAULT_SUDO_THRESHOLD 50
 
 /* autofs */
 #define CONFDB_AUTOFS_CONF_ENTRY "config/autofs"
@@ -161,6 +163,12 @@
 #define CONFDB_IFP_CONF_ENTRY "config/ifp"
 #define CONFDB_IFP_USER_ATTR_LIST "user_attributes"
 #define CONFDB_IFP_WILDCARD_LIMIT "wildcard_limit"
+
+/* Session Recording */
+#define CONFDB_SESSION_RECORDING_CONF_ENTRY "config/session_recording"
+#define CONFDB_SESSION_RECORDING_SCOPE "scope"
+#define CONFDB_SESSION_RECORDING_USERS "users"
+#define CONFDB_SESSION_RECORDING_GROUPS "groups"
 
 /* Domains */
 #define CONFDB_DOMAIN_PATH_TMPL "config/domain/%s"
@@ -351,6 +359,13 @@ struct sss_domain_info {
     char *forest;
     struct sss_domain_info *forest_root;
     const char **upn_suffixes;
+
+    struct certmap_info **certmaps;
+    bool user_name_hint;
+
+    /* Do not use the _output_fqnames property directly in new code, but rather
+     * use sss_domain_info_{get,set}_output_fqnames(). */
+    bool output_fqnames;
 };
 
 /**

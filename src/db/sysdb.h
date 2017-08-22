@@ -186,6 +186,7 @@
 #define SYSDB_OVERRIDE_OBJECT_DN "overrideObjectDN"
 #define SYSDB_USE_DOMAIN_RESOLUTION_ORDER "useDomainResolutionOrder"
 #define SYSDB_DOMAIN_RESOLUTION_ORDER "domainResolutionOrder"
+#define SYSDB_SESSION_RECORDING "sessionRecording"
 
 #define SYSDB_NEXTID_FILTER "("SYSDB_NEXTID"=*)"
 
@@ -238,6 +239,7 @@
                         SYSDB_OVERRIDE_DN, \
                         SYSDB_OVERRIDE_OBJECT_DN, \
                         SYSDB_DEFAULT_OVERRIDE_NAME, \
+                        SYSDB_SESSION_RECORDING, \
                         SYSDB_UUID, \
                         SYSDB_ORIG_DN, \
                         NULL}
@@ -819,7 +821,7 @@ int sysdb_get_netgroup_attr(TALLOC_CTX *mem_ctx,
                             const char **attributes,
                             struct ldb_result **res);
 
-/* functions that modify the databse
+/* functions that modify the database
  * they have to be called within a transaction
  * See sysdb_transaction_send()/_recv() */
 
@@ -1142,6 +1144,13 @@ int sysdb_search_users(TALLOC_CTX *mem_ctx,
                        size_t *msgs_count,
                        struct ldb_message ***msgs);
 
+int sysdb_search_users_by_timestamp(TALLOC_CTX *mem_ctx,
+                                    struct sss_domain_info *domain,
+                                    const char *sub_filter,
+                                    const char **attrs,
+                                    size_t *_msgs_count,
+                                    struct ldb_message ***_msgs);
+
 int sysdb_delete_user(struct sss_domain_info *domain,
                       const char *name, uid_t uid);
 
@@ -1151,6 +1160,13 @@ int sysdb_search_groups(TALLOC_CTX *mem_ctx,
                         const char **attrs,
                         size_t *msgs_count,
                         struct ldb_message ***msgs);
+
+int sysdb_search_groups_by_timestamp(TALLOC_CTX *mem_ctx,
+                                     struct sss_domain_info *domain,
+                                     const char *sub_filter,
+                                     const char **attrs,
+                                     size_t *_msgs_count,
+                                     struct ldb_message ***_msgs);
 
 int sysdb_delete_group(struct sss_domain_info *domain,
                        const char *name, gid_t gid);

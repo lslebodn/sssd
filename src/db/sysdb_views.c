@@ -521,7 +521,7 @@ errno_t sysdb_store_override(struct sss_domain_info *domain,
                                                   NULL);
     if (obj_override_dn != NULL) {
         /* obj_override_dn can either point to the object itself, i.e there is
-         * no override, or to a overide object. This means it can change from
+         * no override, or to a override object. This means it can change from
          * the object DN to a override DN and back but not from one override
          * DN to a different override DN. If the new and the old DN are the
          * same we do not need to update the original object.  */
@@ -777,6 +777,7 @@ errno_t sysdb_apply_default_override(struct sss_domain_info *domain,
     int ret;
     TALLOC_CTX *tmp_ctx;
     struct sysdb_attrs *attrs;
+    struct sysdb_attrs *mapped_attrs = NULL;
     size_t c;
     size_t d;
     size_t num_values;
@@ -791,6 +792,7 @@ errno_t sysdb_apply_default_override(struct sss_domain_info *domain,
                                     SYSDB_USER_CERT,
                                     NULL };
     bool override_attrs_found = false;
+    bool is_cert = false;
 
     if (override_attrs == NULL) {
         /* nothing to do */
@@ -846,6 +848,24 @@ errno_t sysdb_apply_default_override(struct sss_domain_info *domain,
                     num_values = 1;
                 }
 
+                is_cert = false;
+                if (strcmp(allowed_attrs[c], SYSDB_USER_CERT) == 0) {
+                    /* Certificates in overrides are explicitly used to map
+                     * users to certificates, so we add them to
+                     * SYSDB_USER_MAPPED_CERT as well. */
+                    is_cert = true;
+
+                    if (mapped_attrs == NULL) {
+                        mapped_attrs = sysdb_new_attrs(tmp_ctx);
+                        if (mapped_attrs == NULL) {
+                            DEBUG(SSSDBG_OP_FAILURE,
+                                  "sysdb_new_attrs failed.\n");
+                            ret = ENOMEM;
+                            goto done;
+                        }
+                    }
+                }
+
                 for (d = 0; d < num_values; d++) {
                     ret = sysdb_attrs_add_val(attrs,  allowed_attrs[c],
                                               &el->values[d]);
@@ -854,6 +874,18 @@ errno_t sysdb_apply_default_override(struct sss_domain_info *domain,
                               "sysdb_attrs_add_val failed.\n");
                         goto done;
                     }
+
+                    if (is_cert) {
+                        ret = sysdb_attrs_add_val(mapped_attrs,
+                                                  SYSDB_USER_MAPPED_CERT,
+                                                  &el->values[d]);
+                        if (ret != EOK) {
+                            DEBUG(SSSDBG_OP_FAILURE,
+                                  "sysdb_attrs_add_val failed.\n");
+                            goto done;
+                        }
+                    }
+
                     DEBUG(SSSDBG_TRACE_ALL,
                           "Override [%s] with [%.*s] for [%s].\n",
                           allowed_attrs[c], (int) el->values[d].length,
@@ -878,6 +910,15 @@ errno_t sysdb_apply_default_override(struct sss_domain_info *domain,
             DEBUG(SSSDBG_OP_FAILURE, "sysdb_set_entry_attr failed.\n");
             goto done;
         }
+
+        if (mapped_attrs != NULL) {
+            ret = sysdb_set_entry_attr(domain->sysdb, obj_dn, mapped_attrs,
+                                       SYSDB_MOD_ADD);
+            if (ret != EOK) {
+                DEBUG(SSSDBG_OP_FAILURE,
+                      "sysdb_set_entry_attr failed, ignored.\n");
+            }
+        }
     }
 
     ret = EOK;
@@ -890,7 +931,7 @@ done:
 
 #define SYSDB_USER_NAME_OVERRIDE_FILTER "(&(objectClass="SYSDB_OVERRIDE_USER_CLASS")(|("SYSDB_NAME_ALIAS"=%s)("SYSDB_NAME_ALIAS"=%s)("SYSDB_NAME"=%s)))"
 #define SYSDB_USER_UID_OVERRIDE_FILTER "(&(objectClass="SYSDB_OVERRIDE_USER_CLASS")("SYSDB_UIDNUM"=%lu))"
-#define SYSDB_USER_CERT_OVERIDE_FILTER "(&(objectClass="SYSDB_OVERRIDE_USER_CLASS")%s)"
+#define SYSDB_USER_CERT_OVERRIDE_FILTER "(&(objectClass="SYSDB_OVERRIDE_USER_CLASS")%s)"
 #define SYSDB_GROUP_NAME_OVERRIDE_FILTER "(&(objectClass="SYSDB_OVERRIDE_GROUP_CLASS")(|("SYSDB_NAME_ALIAS"=%s)("SYSDB_NAME_ALIAS"=%s)("SYSDB_NAME"=%s)))"
 #define SYSDB_GROUP_GID_OVERRIDE_FILTER "(&(objectClass="SYSDB_OVERRIDE_GROUP_CLASS")("SYSDB_GIDNUM"=%lu))"
 
@@ -937,7 +978,7 @@ errno_t sysdb_search_override_by_cert(TALLOC_CTX *mem_ctx,
     }
 
     ret = ldb_search(domain->sysdb->ldb, tmp_ctx, &override_res, base_dn,
-                     LDB_SCOPE_SUBTREE, attrs, SYSDB_USER_CERT_OVERIDE_FILTER,
+                     LDB_SCOPE_SUBTREE, attrs, SYSDB_USER_CERT_OVERRIDE_FILTER,
                      cert_filter);
     if (ret != LDB_SUCCESS) {
         ret = sysdb_error_to_errno(ret);

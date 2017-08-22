@@ -60,6 +60,44 @@ void cache_req_domain_list_zfree(struct cache_req_domain **cr_domains)
     *cr_domains = NULL;
 }
 
+static bool
+cache_req_domain_use_fqnames(struct sss_domain_info *domain,
+                             bool enforce_non_fqnames)
+{
+    struct sss_domain_info *head;
+
+    head = get_domains_head(domain);
+
+    /*
+     * In order to decide whether fully_qualified_names must be used on the
+     * lookups we have to take into consideration:
+     * - use_fully_qualified_name value of the head of the domains;
+     *   (head->fqnames)
+     * - the presence of a domains' resolution order list;
+     *   (non_fqnames_enforced)
+     *
+     * The relationship between those two can be described by:
+     * - head->fqnames:
+     *   - true: in this case doesn't matter whether it's enforced or not,
+     *           fully-qualified-names will _always_ be used
+     *   - false: in this case (which is also the default case), the usage
+     *            depends on it being enforced;
+     *
+     *     - enforce_non_fqnames:
+     *       - true: in this case, the usage of fully-qualified-names is not
+     *               needed;
+     *       - false: in this case, the usage of fully-qualified-names will be
+     *                done accordingly to what's set for the domain itself.
+     */
+     if (head->fqnames) {
+         return true;
+     } else if (enforce_non_fqnames) {
+         return false;
+     } else {
+         return domain->fqnames;
+     }
+}
+
 static struct cache_req_domain *
 cache_req_domain_new_list_from_string_list(TALLOC_CTX *mem_ctx,
                                            struct sss_domain_info *domains,
@@ -71,9 +109,13 @@ cache_req_domain_new_list_from_string_list(TALLOC_CTX *mem_ctx,
     char *name;
     int flag = SSS_GND_ALL_DOMAINS;
     int i;
+    bool enforce_non_fqnames = false;
     errno_t ret;
 
+    /* Firstly, in case a domains' resolution order is passed ... iterate over
+     * the list adding its domains to the flatten cache req domains' list */
     if (resolution_order != NULL) {
+        enforce_non_fqnames = true;
         for (i = 0; resolution_order[i] != NULL; i++) {
             name = resolution_order[i];
             for (dom = domains; dom; dom = get_next_domain(dom, flag)) {
@@ -87,6 +129,14 @@ cache_req_domain_new_list_from_string_list(TALLOC_CTX *mem_ctx,
                     goto done;
                 }
                 cr_domain->domain = dom;
+                cr_domain->fqnames =
+                    cache_req_domain_use_fqnames(dom, enforce_non_fqnames);
+
+                /* when using the domain resolution order, using shortnames as
+                 * input is allowed by default. However, we really want to use
+                 * the fully qualified name as output in order to avoid
+                 * conflicts whith users who have the very same name. */
+                sss_domain_info_set_output_fqnames(cr_domain->domain, true);
 
                 DLIST_ADD_END(cr_domains, cr_domain,
                               struct cache_req_domain *);
@@ -95,6 +145,8 @@ cache_req_domain_new_list_from_string_list(TALLOC_CTX *mem_ctx,
         }
     }
 
+    /* Then iterate through all the other domains (and subdomains) and add them
+     * to the flatten cache req domains' list */
     for (dom = domains; dom; dom = get_next_domain(dom, flag)) {
         if (string_in_list(dom->name, resolution_order, false)) {
             continue;
@@ -106,6 +158,16 @@ cache_req_domain_new_list_from_string_list(TALLOC_CTX *mem_ctx,
             goto done;
         }
         cr_domain->domain = dom;
+        cr_domain->fqnames =
+            cache_req_domain_use_fqnames(dom, enforce_non_fqnames);
+
+        /* when using the domain resolution order, using shortnames as input
+         * is allowed by default. However, we really want to use the fully
+         * qualified name as output in order to avoid conflicts whith users
+         * who have the very same name. */
+        if (resolution_order != NULL) {
+            sss_domain_info_set_output_fqnames(cr_domain->domain, true);
+        }
 
         DLIST_ADD_END(cr_domains, cr_domain, struct cache_req_domain *);
     }
@@ -120,24 +182,29 @@ done:
     return cr_domains;
 }
 
-struct cache_req_domain *
+errno_t
 cache_req_domain_new_list_from_domain_resolution_order(
                                         TALLOC_CTX *mem_ctx,
                                         struct sss_domain_info *domains,
-                                        const char *domain_resolution_order)
+                                        const char *domain_resolution_order,
+                                        struct cache_req_domain **_cr_domains)
 {
     TALLOC_CTX *tmp_ctx;
-    struct cache_req_domain *cr_domains = NULL;
+    struct cache_req_domain *cr_domains;
     char **list = NULL;
     errno_t ret;
 
     tmp_ctx = talloc_new(NULL);
     if (tmp_ctx == NULL) {
-        return NULL;
+        return ENOMEM;
     }
 
     if (domain_resolution_order != NULL) {
         if (strcmp(domain_resolution_order, ":") != 0) {
+            DEBUG(SSSDBG_TRACE_FUNC,
+                  "Domain resolution order list (split by ':'): \"%s\"\n",
+                  domain_resolution_order);
+
             ret = split_on_separator(tmp_ctx, domain_resolution_order, ':',
                                      true, true, &list, NULL);
             if (ret != EOK) {
@@ -146,7 +213,14 @@ cache_req_domain_new_list_from_domain_resolution_order(
                         ret, sss_strerror(ret));
                 goto done;
             }
+        } else {
+            DEBUG(SSSDBG_TRACE_FUNC,
+                  "Domain resolution order list: ':' "
+                  "(do not use any specific order)\n");
         }
+    } else {
+        DEBUG(SSSDBG_TRACE_FUNC,
+              "Domain resolution order list: not set\n");
     }
 
     cr_domains = cache_req_domain_new_list_from_string_list(mem_ctx, domains,
@@ -160,7 +234,10 @@ cache_req_domain_new_list_from_domain_resolution_order(
         goto done;
     }
 
+    *_cr_domains = cr_domains;
+    ret = EOK;
+
 done:
     talloc_free(tmp_ctx);
-    return cr_domains;
+    return ret;
 }

@@ -29,7 +29,7 @@
 
 #include "lib/idmap/sss_idmap.h"
 #include "lib/idmap/sss_idmap_private.h"
-#include "util/murmurhash3.h"
+#include "shared/murmurhash3.h"
 
 #define SID_FMT "%s-%d"
 #define SID_STR_MAX_LEN 1024
@@ -180,6 +180,22 @@ const char *idmap_error_string(enum idmap_error_code err)
             break;
         case IDMAP_NO_RANGE:
             return "IDMAP range not found";
+            break;
+        case IDMAP_BUILTIN_SID:
+            return "IDMAP SID from BUILTIN domain";
+            break;
+        case IDMAP_OUT_OF_SLICES:
+            return "IDMAP not more free slices";
+            break;
+        case IDMAP_COLLISION:
+            return "IDMAP new range collides with existing one";
+            break;
+        case IDMAP_EXTERNAL:
+            return "IDMAP ID managed externally";
+            break;
+        case IDMAP_NAME_UNKNOWN:
+            return "IDMAP domain with the given name not found";
+            break;
         default:
             return "IDMAP unknown error code";
     }

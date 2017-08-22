@@ -161,7 +161,9 @@
                         <para>
                             Timeout in seconds between heartbeats for this
                             service. This is used to ensure that the process
-                            is alive and capable of answering requests.
+                            is alive and capable of answering requests. Note
+                            that after three missed heartbeats the process
+                            will terminate itself.
                         </para>
                         <para>
                             Default: 10
@@ -246,7 +248,7 @@
                                 information. SSSD can use more domains
                                 at the same time, but at least one
                                 must be configured or SSSD won't start.
-                                This parameter described the list of domains
+                                This parameter describes the list of domains
                                 in the order you want them to be queried.
                                 A domain name should only consist of alphanumeric
                                 ASCII characters, dashes, dots and underscores.
@@ -264,7 +266,7 @@
                             <para>
                                 Each domain can have an individual regular
                                 expression configured. For some ID providers
-                                there are also default regular expressions.  See
+                                there are also default regular expressions. See
                                 DOMAIN SECTIONS for more info on these regular
                                 expressions.
                             </para>
@@ -490,7 +492,7 @@
                                         <para>The nickname of the cert to trust
                                         (expected) to sign the OCSP responses.
                                         The certificate with the given nickname
-                                        must be availble in the systems NSS
+                                        must be available in the systems NSS
                                         database.</para>
                                         <para>This option must be used together
                                         with ocsp_default_responder.</para>
@@ -621,7 +623,9 @@
                             a client of an SSSD process can hold onto a file
                             descriptor without communicating on it. This value
                             is limited in order to avoid resource exhaustion
-                            on the system.
+                            on the system. The timeout can't be shorter than
+                            10 seconds. If a lower value is configured, it
+                            will be adjusted to 10 seconds.
                         </para>
                         <para>
                             Default: 60
@@ -1094,9 +1098,9 @@ fallback_homedir = /home/%u
                     <listitem>
                         <para>
                             A comma separated list of strings which allows to
-                            remove (filter) data send by the PAM responder to
+                            remove (filter) data sent by the PAM responder to
                             pam_sss PAM module. There are different kind of
-                            responses send to pam_sss e.g. messages displayed to
+                            responses sent to pam_sss e.g. messages displayed to
                             the user or environment variables which should be
                             set by pam_sss.
                         </para>
@@ -1109,16 +1113,16 @@ fallback_homedir = /home/%u
                             Currently the following filters are supported:
                             <variablelist>
                                 <varlistentry><term>ENV</term>
-                                    <listitem><para>Do not sent any environment
+                                    <listitem><para>Do not send any environment
                                     variables to any service.</para></listitem>
                                 </varlistentry>
                                 <varlistentry><term>ENV:var_name</term>
-                                    <listitem><para>Do not sent environment
+                                    <listitem><para>Do not send environment
                                     variable var_name to any
                                     service.</para></listitem>
                                 </varlistentry>
                                 <varlistentry><term>ENV:var_name:service</term>
-                                    <listitem><para>Do not sent environment
+                                    <listitem><para>Do not send environment
                                     variable var_name to
                                     service.</para></listitem>
                                 </varlistentry>
@@ -1253,7 +1257,7 @@ fallback_homedir = /home/%u
                         </para>
                         <para>
                             Note: Please be aware that message is only
-                            printed for the SSH service unless pam_verbostiy
+                            printed for the SSH service unless pam_verbosity
                             is set to 3 (show all messages and debug
                             information).
                         </para>
@@ -1374,6 +1378,25 @@ pam_account_locked_message = Account locked, please contact help desk.
                     </listitem>
                 </varlistentry>
             </variablelist>
+            <variablelist>
+                <varlistentry>
+                    <term>sudo_threshold (integer)</term>
+                    <listitem>
+                        <para>
+                            Maximum number of expired rules that can be
+                            refreshed at once. If number of expired rules
+                            is below threshold, those rules are refreshed
+                            with <quote>rules refresh</quote> mechanism. If
+                            the threshold is exceeded a
+                            <quote>full refresh</quote> of sudo rules is
+                            triggered instead.
+                        </para>
+                        <para>
+                            Default: 50
+                        </para>
+                    </listitem>
+                </varlistentry>
+            </variablelist>
         </refsect2>
 
         <refsect2 id='AUTOFS' condition="with_autofs">
@@ -1456,13 +1479,13 @@ pam_account_locked_message = Account locked, please contact help desk.
                 authentication to the PAC responder. The sub-domain provider
                 collects domain SID and ID ranges of the domain the client is
                 joined to and of remote trusted domains from the local domain
-                controller.  If the PAC is decoded and evaluated some of the
+                controller. If the PAC is decoded and evaluated some of the
                 following operations are done:
                 <itemizedlist>
                     <listitem><para>If the remote user does not exist in the
-                    cache, it is created. The uid is determined with the help
-                    of the SID, trusted domains will have UPGs and the gid
-                    will have the same value as the uid. The home directory is
+                    cache, it is created. The UID is determined with the help
+                    of the SID, trusted domains will have UPGs and the GID
+                    will have the same value as the UID. The home directory is
                     set based on the subdomain_homedir parameter. The shell will
                     be empty by default, i.e. the system defaults are used, but
                     can be overwritten with the default_shell parameter.</para>
@@ -1508,6 +1531,105 @@ pam_account_locked_message = Account locked, please contact help desk.
                         </para>
                         <para>
                             Default: 300
+                        </para>
+                    </listitem>
+                </varlistentry>
+            </variablelist>
+        </refsect2>
+
+        <refsect2 id='SESSION_RECORDING'>
+            <title>Session recording configuration options</title>
+            <para>
+                Session recording works in conjunction with
+                <citerefentry>
+                    <refentrytitle>tlog-rec-session</refentrytitle>
+                    <manvolnum>8</manvolnum>
+                </citerefentry>, a part of tlog package, to log what users see
+                and type when they log in on a text terminal.
+                See also
+                <citerefentry>
+                    <refentrytitle>sssd-session-recording</refentrytitle>
+                    <manvolnum>5</manvolnum>
+                </citerefentry>.
+            </para>
+            <para>
+                These options can be used to configure session recording.
+            </para>
+            <variablelist>
+                <varlistentry>
+                    <term>scope (string)</term>
+                    <listitem>
+                        <para>
+                            One of the following strings specifying the scope
+                            of session recording:
+                            <variablelist>
+                                <varlistentry>
+                                    <term>"none"</term>
+                                    <listitem>
+                                        <para>
+                                            No users are recorded.
+                                        </para>
+                                    </listitem>
+                                </varlistentry>
+                                <varlistentry>
+                                    <term>"some"</term>
+                                    <listitem>
+                                        <para>
+                                            Users/groups specified by
+                                            <replaceable>users</replaceable>
+                                            and
+                                            <replaceable>groups</replaceable>
+                                            options are recorded.
+                                        </para>
+                                    </listitem>
+                                </varlistentry>
+                                <varlistentry>
+                                    <term>"all"</term>
+                                    <listitem>
+                                        <para>
+                                            All users are recorded.
+                                        </para>
+                                    </listitem>
+                                </varlistentry>
+                            </variablelist>
+                        </para>
+                        <para>
+                            Default: "none"
+                        </para>
+                    </listitem>
+                </varlistentry>
+                <varlistentry>
+                    <term>users (string)</term>
+                    <listitem>
+                        <para>
+                            A comma-separated list of users which should have
+                            session recording enabled. Matches user names as
+                            returned by NSS. I.e. after the possible space
+                            replacement, case changes, etc.
+                        </para>
+                        <para>
+                            Default: Empty. Matches no users.
+                        </para>
+                    </listitem>
+                </varlistentry>
+                <varlistentry>
+                    <term>groups (string)</term>
+                    <listitem>
+                        <para>
+                            A comma-separated list of groups, members of which
+                            should have session recording enabled. Matches
+                            group names as returned by NSS. I.e. after the
+                            possible space replacement, case changes, etc.
+                        </para>
+                        <para>
+                            NOTE: using this option (having it set to
+                            anything) has a considerable performance cost,
+                            because each uncached request for a user requires
+                            retrieving and matching the groups the user is
+                            member of.
+                        </para>
+                        <para>
+                            Default: Empty. Matches no groups.
                         </para>
                     </listitem>
                 </varlistentry>
@@ -2110,7 +2232,7 @@ pam_account_locked_message = Account locked, please contact help desk.
                         </para>
                         <para>
                             <quote>ldap</quote> to change a password stored
-                            in a LDAP server.  See
+                            in a LDAP server. See
                             <citerefentry>
                                 <refentrytitle>sssd-ldap</refentrytitle>
                                 <manvolnum>5</manvolnum>
@@ -2759,7 +2881,7 @@ subdomain_inherit = ldap_purge_cache_timeout
                 The following example illustrates the use of an application
                 domain. In this setup, the POSIX domain is connected to an LDAP
                 server and is used by the OS through the NSS responder. In addition,
-                the application domains also requests the telephoneNumber attribute,
+                the application domain also requests the telephoneNumber attribute,
                 stores it as the phone attribute in the cache and makes the phone
                 attribute reachable through the D-Bus interface.
             </para>
@@ -2912,7 +3034,7 @@ ldap_user_extra_attrs = phone:telephoneNumber
         <para>
             Some options used in the domain section can also be used in the
             trusted domain section, that is, in a section called
-            <quote>[domain/<replaceable>DOMAIN_NAME</replaceable>]/<replaceable>TRUSTED_DOMAIN_NAME</replaceable>]</quote>.
+            <quote>[domain/<replaceable>DOMAIN_NAME</replaceable>/<replaceable>TRUSTED_DOMAIN_NAME</replaceable>]</quote>.
             Currently supported options in the trusted domain section are:
         </para>
             <para>ldap_search_base,</para>

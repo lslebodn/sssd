@@ -137,6 +137,11 @@ cache_req_create_and_add_result(TALLOC_CTX *mem_ctx,
                                 size_t *_num_results);
 
 struct ldb_result *
+cache_req_create_ldb_result_from_msg_list(TALLOC_CTX *mem_ctx,
+                                          struct ldb_message **ldb_msgs,
+                                          size_t ldb_msg_count);
+
+struct ldb_result *
 cache_req_create_ldb_result_from_msg(TALLOC_CTX *mem_ctx,
                                      struct ldb_message *ldb_msg);
 
@@ -146,6 +151,16 @@ cache_req_create_result_from_msg(TALLOC_CTX *mem_ctx,
                                  struct ldb_message *ldb_msg,
                                  const char *lookup_name,
                                  const char *well_known_domain);
+
+struct tevent_req *
+cache_req_sr_overlay_send(TALLOC_CTX *mem_ctx,
+                          struct tevent_context *ev,
+                          struct cache_req *cr,
+                          struct cache_req_result **results,
+                          size_t num_results);
+
+errno_t
+cache_req_sr_overlay_recv(struct tevent_req *req);
 
 /* Plug-in common. */
 

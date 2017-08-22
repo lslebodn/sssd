@@ -17,6 +17,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include <ctype.h>
 #include <stdio.h>
 #include <errno.h>
 #include <talloc.h>
@@ -51,7 +52,13 @@ sss_krb5_get_primary(TALLOC_CTX *mem_ctx,
             *c = toupper(*c);
         }
 
-        primary = talloc_asprintf(mem_ctx, "%s$", shortname);
+        /* The samAccountName is recommended to be less than 20 characters.
+         * This is only for users and groups. For machine accounts,
+         * the real limit is caused by NetBIOS protocol.
+         * NetBIOS names are limited to 16 (15 + $)
+         * https://support.microsoft.com/en-us/help/163409/netbios-suffixes-16th-character-of-the-netbios-name
+         */
+        primary = talloc_asprintf(mem_ctx, "%.15s$", shortname);
         talloc_free(shortname);
         return primary;
     }

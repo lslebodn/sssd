@@ -92,7 +92,7 @@ option_strings = {
     'offline_failed_login_attempts' : _('How many failed logins attempts are allowed when offline'),
     'offline_failed_login_delay' : _('How long (minutes) to deny login after offline_failed_login_attempts has been reached'),
     'pam_verbosity' : _('What kind of messages are displayed to the user during authentication'),
-    'pam_response_filter' : _('Filter PAM responses send the pam_sss'),
+    'pam_response_filter' : _('Filter PAM responses sent to the pam_sss'),
     'pam_id_timeout' : _('How many seconds to keep identity information cached for PAM requests'),
     'pam_pwd_expiration_warning' : _('How many days before password expiration a warning should be displayed'),
     'pam_trusted_users' : _('List of trusted uids or user\'s name'),
@@ -100,13 +100,14 @@ option_strings = {
     'pam_account_expired_message' : _('Message printed when user account is expired.'),
     'pam_account_locked_message' : _('Message printed when user account is locked.'),
     'pam_cert_auth' : _('Allow certificate based/Smartcard authentication.'),
-    'pam_cert_db_path' : _('Path to certificate databse with PKCS#11 modules.'),
+    'pam_cert_db_path' : _('Path to certificate database with PKCS#11 modules.'),
     'p11_child_timeout' : _('How many seconds will pam_sss wait for p11_child to finish'),
     'pam_app_services' : _('Which PAM services are permitted to contact application domains'),
 
     # [sudo]
     'sudo_timed' : _('Whether to evaluate the time-based attributes in sudo rules'),
     'sudo_inverse_order' : _('If true, SSSD will switch back to lower-wins ordering logic'),
+    'sudo_threshold' : _('Maximum number of rules that can be refreshed at once. If this is exceeded, full refresh is performed.'),
 
     # [autofs]
     'autofs_negative_timeout' : _('Negative cache timeout length (seconds)'),
@@ -138,7 +139,7 @@ option_strings = {
     'username': _('The username to use when authenticating to a Custodia server using basic_auth'),
     'password': _('The password to use when authenticating to a Custodia server using basic_auth'),
     'verify_peer': _('If true peer\'s certificate is verified if proxy_url uses https protocol'),
-    'verify_host': _('If false peer\'s certificate may contain different hostname then proxy_url when https protocol is used'),
+    'verify_host': _('If false peer\'s certificate may contain different hostname than proxy_url when https protocol is used'),
     'capath': _('Path to directory where certificate authority certificates are stored'),
     'cacert': _('Path to file containing server\'s CA certificate'),
     'cert': _('Path to file containing client\'s certificate'),
@@ -188,6 +189,7 @@ option_strings = {
     'subdomain_enumerate' : _('Control enumeration of trusted domains'),
     'subdomain_refresh_interval' : _('How often should subdomains list be refreshed'),
     'subdomain_inherit' : _('List of options that should be inherited into a subdomain'),
+    'subdomain_homedir' : _('Default subdomain homedir value'),
     'cached_auth_timeout' : _('How long can cached credentials be used for cached authentication'),
     'full_name_format' : _('Printf-compatible format for displaying fully-qualified names'),
     're_expression' : _('Regex to parse username and domain'),
@@ -211,7 +213,7 @@ option_strings = {
     'ipa_views_search_base': _("Search base for view containers"),
     'ipa_view_class': _("Objectclass for view containers"),
     'ipa_view_name': _("Attribute with the name of the view"),
-    'ipa_overide_object_class': _("Objectclass for override objects"),
+    'ipa_override_object_class': _("Objectclass for override objects"),
     'ipa_anchor_uuid': _("Attribute with the reference to the original object"),
     'ipa_user_override_object_class': _("Objectclass for user override objects"),
     'ipa_group_override_object_class': _("Objectclass for group override objects"),
@@ -237,7 +239,7 @@ option_strings = {
     'ad_gpo_default_right' : _('Default logon right (or permit/deny) to use for unmapped PAM service names'),
     'ad_site' : _('a particular site to be used by the client'),
     'ad_maximum_machine_account_password_age' : _('Maximum age in days before the machine account password should be renewed'),
-    'ad_machine_account_password_renewal_opts' : _('Option for tuing the machine account renewal task'),
+    'ad_machine_account_password_renewal_opts' : _('Option for tuning the machine account renewal task'),
 
     # [provider/krb5]
     'krb5_kdcip' : _('Kerberos server address'),
@@ -917,9 +919,11 @@ class SSSDService(SSSDConfigObject):
         if type(value) != option_schema[0]:
             # If it's possible to convert it, do so
             try:
-                if option_schema[0] == bool and \
-                type(value) == str:
+                if option_schema[0] == bool and type(value) == str:
                     value = self.schema.bool_lookup[value.lower()]
+                elif option_schema[0] == int and type(value) == str:
+                    # Make sure we handle any reasonable base
+                    value = int(value, 0)
                 else:
                     value = option_schema[0](value)
             except ValueError:
@@ -1791,6 +1795,8 @@ class SSSDConfig(SSSDChangeConf):
         for option,value in service.get_all_options().items():
             if (type(value) == list):
                 value = ', '.join(value)
+            if option == "debug_level":
+                value = self._get_debug_level_val(value)
             addkw.append( { 'type'  : 'option',
                             'name'  : option,
                             'value' : str(value) } )
@@ -2135,6 +2141,8 @@ class SSSDConfig(SSSDChangeConf):
         for option,value in domain.get_all_options().items():
             if (type(value) == list):
                 value = ', '.join(value)
+            if option == "debug_level":
+                value = self._get_debug_level_val(value)
             self.set(sectionname, option, str(value))
 
         if domain.active:

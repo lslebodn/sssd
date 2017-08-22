@@ -25,20 +25,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <strings.h>
-#include <ctype.h>
-#include <errno.h>
 #include <libintl.h>
-#include <limits.h>
 #include <locale.h>
 #include <time.h>
 #include <pcre.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
 
 #include <talloc.h>
@@ -47,9 +39,10 @@
 #include <dhash.h>
 
 #include "confdb/confdb.h"
+#include "shared/io.h"
+#include "shared/safealign.h"
 #include "util/atomic_io.h"
 #include "util/util_errors.h"
-#include "util/util_safealign.h"
 #include "util/sss_format.h"
 #include "util/debug.h"
 
@@ -192,7 +185,6 @@ void server_loop(struct main_context *main_ctx);
 void orderly_shutdown(int status);
 
 /* from signal.c */
-#include <signal.h>
 void BlockSignals(bool block, int signum);
 void (*CatchSignal(int signum,void (*handler)(int )))(int);
 
@@ -303,6 +295,15 @@ char *sss_output_name(TALLOC_CTX *mem_ctx,
                       const char *fqname,
                       bool case_sensitive,
                       const char replace_space);
+
+int sss_output_fqname(TALLOC_CTX *mem_ctx,
+                      struct sss_domain_info *domain,
+                      const char *name,
+                      char override_space,
+                      char **_output_name);
+
+const char *sss_get_name_from_msg(struct sss_domain_info *domain,
+                                  struct ldb_message *msg);
 
 /* from backup-file.c */
 int backup_file(const char *src, int dbglvl);
@@ -539,6 +540,7 @@ enum sss_domain_state sss_domain_get_state(struct sss_domain_info *dom);
 void sss_domain_set_state(struct sss_domain_info *dom,
                           enum sss_domain_state state);
 bool is_email_from_domain(const char *email, struct sss_domain_info *dom);
+bool sss_domain_is_forest_root(struct sss_domain_info *dom);
 const char *sss_domain_type_str(struct sss_domain_info *dom);
 
 struct sss_domain_info*
@@ -561,6 +563,11 @@ errno_t sssd_domain_init(TALLOC_CTX *mem_ctx,
                          const char *db_path,
                          struct sss_domain_info **_domain);
 
+void sss_domain_info_set_output_fqnames(struct sss_domain_info *domain,
+                                        bool output_fqname);
+
+bool sss_domain_info_get_output_fqnames(struct sss_domain_info *domain);
+
 #define IS_SUBDOMAIN(dom) ((dom)->parent != NULL)
 
 #define DOM_HAS_VIEWS(dom) ((dom)->has_views)
@@ -575,7 +582,8 @@ errno_t sss_get_domain_mappings_content(TALLOC_CTX *mem_ctx,
 
 errno_t sss_write_domain_mappings(struct sss_domain_info *domain);
 
-errno_t sss_write_krb5_conf_snippet(const char *path, bool canonicalize);
+errno_t sss_write_krb5_conf_snippet(const char *path, bool canonicalize,
+                                    bool udp_limit);
 
 errno_t get_dom_names(TALLOC_CTX *mem_ctx,
                       struct sss_domain_info *start_dom,
@@ -585,7 +593,6 @@ errno_t get_dom_names(TALLOC_CTX *mem_ctx,
 /* from util_lock.c */
 errno_t sss_br_lock_file(int fd, size_t start, size_t len,
                          int num_tries, useconds_t wait);
-#include "io.h"
 
 #ifdef HAVE_PAC_RESPONDER
 #define BUILD_WITH_PAC_RESPONDER true

@@ -74,12 +74,6 @@ struct nss_ctx {
     char *override_homedir;
     char *fallback_homedir;
     char *homedir_substr;
-    char **allowed_shells;
-    char *override_shell;
-    char **vetoed_shells;
-    char **etc_shells;
-    char *shell_fallback;
-    char *default_shell;
     const char **extra_attributes;
 
     /* Enumeration. */
@@ -139,17 +133,6 @@ nss_setnetgrent_recv(struct tevent_req *req);
 const char *
 nss_get_name_from_msg(struct sss_domain_info *domain,
                       struct ldb_message *msg);
-
-int sized_output_name(TALLOC_CTX *mem_ctx,
-                      struct resp_ctx *rctx,
-                      const char *orig_name,
-                      struct sss_domain_info *name_dom,
-                      struct sized_string **_name);
-
-int sized_member_name(TALLOC_CTX *mem_ctx,
-                      struct resp_ctx *rctx,
-                      const char *member_name,
-                      struct sized_string **_name);
 
 const char *
 nss_get_pwfield(struct nss_ctx *nctx,
