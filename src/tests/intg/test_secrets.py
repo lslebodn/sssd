@@ -361,8 +361,13 @@ def test_containers(setup_for_secrets, secrets_cli):
 
 
 def get_fds(pid):
+    """
+    Get list of human readable file descriptor for pid.
+    It is similar to long output of ls in shell: ls -l /proc/$pid/fd/
+    """
     procpath = os.path.join("/proc/", str(pid), "fd")
-    return os.listdir(procpath)
+    fds_paths = ["%s/%s" % (procpath, f) for f in os.listdir(procpath)]
+    return ["%s -> %s" % (fd, os.readlink(fd)) for fd in fds_paths]
 
 
 @pytest.fixture
@@ -394,7 +399,7 @@ def test_idle_timeout(setup_for_cli_timeout_test):
     sock.connect(sock_path)
     time.sleep(1)
     fds_conn = get_fds(secpid)
-    assert len(fds_pre) + 1 >= len(fds_conn), \
+    assert len(fds_pre) + 1 == len(fds_conn), \
         "FD difference\n{0}\n{1}".format(set(fds_pre) - set(fds_conn),
                                          set(fds_conn) - set(fds_pre))
     # With the idle timeout set to 10 seconds, we need to sleep at least 15,
@@ -405,7 +410,7 @@ def test_idle_timeout(setup_for_cli_timeout_test):
     time.sleep(15)
 
     fds_post = get_fds(secpid)
-    assert len(fds_pre) >= len(fds_post), \
+    assert len(fds_pre) == len(fds_post), \
         "FD difference\n{0}\n{1}".format(set(fds_pre) - set(fds_post),
                                          set(fds_post) - set(fds_pre))
 
