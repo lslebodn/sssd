@@ -28,6 +28,12 @@ import socket
 import pytest
 from requests import HTTPError
 
+try:
+    import psutil
+except ImportError:
+    # sssd-secrets is not build on all platforms
+    pass
+
 from util import unindent
 from secrets import SecretsLocalClient
 
@@ -360,11 +366,6 @@ def test_containers(setup_for_secrets, secrets_cli):
     assert str(err406.value).startswith("406")
 
 
-def get_fds(pid):
-    procpath = os.path.join("/proc/", str(pid), "fd")
-    return os.listdir(procpath)
-
-
 @pytest.fixture
 def setup_for_cli_timeout_test(request):
     """
@@ -387,14 +388,15 @@ def test_idle_timeout(setup_for_cli_timeout_test):
     """
     secpid = setup_for_cli_timeout_test
     sock_path = get_secrets_socket()
+    sssd_secrets = psutil.Process(secpid)
 
-    fds_pre = get_fds(secpid)
+    fds_pre = sssd_secrets.connections('unix')
 
     sock = socket.socket(family=socket.AF_UNIX)
     sock.connect(sock_path)
     time.sleep(1)
-    fds_conn = get_fds(secpid)
-    assert len(fds_pre) + 1 >= len(fds_conn), \
+    fds_conn = sssd_secrets.connections('unix')
+    assert len(fds_pre) + 1 == len(fds_conn), \
         "FD difference\n{0}\n{1}".format(set(fds_pre) - set(fds_conn),
                                          set(fds_conn) - set(fds_pre))
     # With the idle timeout set to 10 seconds, we need to sleep at least 15,
@@ -404,8 +406,8 @@ def test_idle_timeout(setup_for_cli_timeout_test):
     # disconnect
     time.sleep(15)
 
-    fds_post = get_fds(secpid)
-    assert len(fds_pre) >= len(fds_post), \
+    fds_post = sssd_secrets.connections('unix')
+    assert fds_pre == fds_post, \
         "FD difference\n{0}\n{1}".format(set(fds_pre) - set(fds_post),
                                          set(fds_post) - set(fds_pre))
 
