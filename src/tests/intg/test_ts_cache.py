@@ -632,15 +632,15 @@ def test_sss_cache_invalidate_user(ldap_conn,
     sysdb_attrs, ts_attrs = get_user_attrs(ldb_conn, "user1",
                                            SSSD_DOMAIN, TS_ATTRLIST)
 
-    assert sysdb_attrs.get("dataExpireTimestamp") == '1'
-    assert ts_attrs.get("dataExpireTimestamp") == '1'
+    assert sysdb_attrs.get("dataExpireTimestamp") == b'1'
+    assert ts_attrs.get("dataExpireTimestamp") == b'1'
 
     time.sleep(1)
     pwd.getpwnam("user1")
     sysdb_attrs, ts_attrs = get_user_attrs(ldb_conn, "user1",
                                            SSSD_DOMAIN, TS_ATTRLIST)
 
-    assert sysdb_attrs.get("dataExpireTimestamp") == '1'
+    assert sysdb_attrs.get("dataExpireTimestamp") == b'1'
     assert_diff_attrval(ts_attrs, sysdb_attrs, "dataExpireTimestamp")
 
 
@@ -661,13 +661,13 @@ def test_sss_cache_invalidate_group(ldap_conn,
     sysdb_attrs, ts_attrs = get_group_attrs(ldb_conn, "group1",
                                             SSSD_DOMAIN, TS_ATTRLIST)
 
-    assert sysdb_attrs.get("dataExpireTimestamp") == '1'
-    assert ts_attrs.get("dataExpireTimestamp") == '1'
+    assert sysdb_attrs.get("dataExpireTimestamp") == b'1'
+    assert ts_attrs.get("dataExpireTimestamp") == b'1'
 
     time.sleep(1)
     grp.getgrnam("group1")
     sysdb_attrs, ts_attrs = get_group_attrs(ldb_conn, "group1",
                                             SSSD_DOMAIN, TS_ATTRLIST)
 
-    assert sysdb_attrs.get("dataExpireTimestamp") == '1'
+    assert sysdb_attrs.get("dataExpireTimestamp") == b'1'
     assert_diff_attrval(ts_attrs, sysdb_attrs, "dataExpireTimestamp")
