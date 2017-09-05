@@ -228,7 +228,7 @@ def simple_ad(request, ldap_conn):
         ["ldbadd", "-H", config.DB_PATH + "/cache_FakeAD.ldb"],
         stdin=subprocess.PIPE, close_fds=True
     )
-    ldbadd.communicate(sssd_cache_ldif)
+    ldbadd.communicate(sssd_cache_ldif.encode('utf-8'))
     if ldbadd.returncode != 0:
         raise Exception("Failed to import initila data with ldbadd")
 

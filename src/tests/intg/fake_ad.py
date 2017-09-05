@@ -19,7 +19,6 @@
 
 import hashlib
 import base64
-import urllib
 import time
 import ldap
 import os
@@ -29,6 +28,11 @@ import shutil
 import sys
 from util import *
 from ds_openldap import DSOpenLDAP
+
+try:
+    from urllib import quote as url_quote
+except ImportError:
+    from urllib.parse import quote as url_quote
 
 
 def hash_password(password):
@@ -71,7 +75,7 @@ class FakeAD(DSOpenLDAP):
     def setup(self):
         """Setup the instance."""
         ldapi_socket = self.run_dir + "/ldapi"
-        self.ldapi_url = "ldapi://" + urllib.quote(ldapi_socket, "")
+        self.ldapi_url = "ldapi://" + url_quote(ldapi_socket, "")
         self.url_list = self.ldapi_url + " " + self.ldap_url
 
         os.makedirs(self.conf_slapd_d_dir)
@@ -91,13 +95,13 @@ class FakeAD(DSOpenLDAP):
         #
         modlist = [
             (ldap.MOD_DELETE, "olcObjectClasses",
-             "{4}( 2.5.6.6 NAME 'person' DESC 'RFC2256: a person' SUP top "
-             "STRUCTURAL MUST ( sn $ cn ) MAY ( userPassword $ "
-             "telephoneNumber $ seeAlso $ description ) )"),
+             b"{4}( 2.5.6.6 NAME 'person' DESC 'RFC2256: a person' SUP top "
+             b"STRUCTURAL MUST ( sn $ cn ) MAY ( userPassword $ "
+             b"telephoneNumber $ seeAlso $ description ) )"),
             (ldap.MOD_ADD, "olcObjectClasses",
-             "{4}( 2.5.6.6 NAME 'person' DESC 'RFC2256: a person' SUP top "
-             "STRUCTURAL MUST ( cn ) MAY ( sn $ userPassword $ "
-             "telephoneNumber $ seeAlso $ description ) )"),
+             b"{4}( 2.5.6.6 NAME 'person' DESC 'RFC2256: a person' SUP top "
+             b"STRUCTURAL MUST ( cn ) MAY ( sn $ userPassword $ "
+             b"telephoneNumber $ seeAlso $ description ) )"),
         ]
         ldap_conn = ldap.initialize(self.ldapi_url)
         ldap_conn.simple_bind_s(self.admin_rdn + ",cn=config", self.admin_pw)
@@ -114,15 +118,15 @@ class FakeAD(DSOpenLDAP):
         ldap_conn = ldap.initialize(self.ldap_url)
         ldap_conn.simple_bind_s(self.admin_dn, self.admin_pw)
         ldap_conn.add_s(self.base_dn, [
-            ("objectClass", ["dcObject", "organization"]),
-            ("o", "Example Company"),
+            ("objectClass", [b"dcObject", b"organization"]),
+            ("o", b"Example Company"),
         ])
         ldap_conn.add_s("cn=Manager," + self.base_dn, [
-            ("objectClass", "organizationalRole"),
+            ("objectClass", b"organizationalRole"),
         ])
         for ou in ("Users", "Groups", "Netgroups", "Services", "Policies"):
             ldap_conn.add_s("ou=" + ou + "," + self.base_dn, [
-                ("objectClass", ["top", "organizationalUnit"]),
+                ("objectClass", [b"top", b"organizationalUnit"]),
             ])
         ldap_conn.unbind_s()
 
