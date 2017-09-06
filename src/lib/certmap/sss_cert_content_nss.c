@@ -472,9 +472,11 @@ static int add_pkinit_princ_to_san_list(TALLOC_CTX *mem_ctx,
 {
     struct san_list *i = NULL;
     SECStatus rv;
-    struct kerberos_principal_name kname = { 0 };
+    struct kerberos_principal_name kname;
     int ret;
     size_t c;
+
+    memset(&kname, 0, sizeof(kname));
 
     rv = SEC_ASN1DecodeItem(pool, &kname,
                             kerberos_principal_name_template,
