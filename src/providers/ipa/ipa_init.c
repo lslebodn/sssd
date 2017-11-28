@@ -972,9 +972,11 @@ errno_t sssm_ipa_session_init(TALLOC_CTX *mem_ctx,
     }
 
     session_ctx->sdap_ctx = id_ctx->sdap_id_ctx;
-    session_ctx->host_map = id_ctx->ipa_options->host_map;
+    session_ctx->host_map = id_ctx->ipa_options->id->host_map;
     session_ctx->hostgroup_map = id_ctx->ipa_options->hostgroup_map;
-    session_ctx->host_search_bases = id_ctx->ipa_options->host_search_bases;
+    session_ctx->host_search_bases = id_ctx->ipa_options->id->sdom->host_search_bases;
+    // TODO: update session_ctx
+    //session_ctx->hbac_search_bases = id_ctx->ipa_options->hbac_search_bases;
     session_ctx->deskprofile_search_bases = id_ctx->ipa_options->deskprofile_search_bases;
 
     ret = dp_copy_options(session_ctx, id_ctx->ipa_options->basic,
