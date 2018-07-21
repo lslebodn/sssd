@@ -179,7 +179,7 @@ static int buf_to_addr_port_list(struct sssd_ctx *ctx,
     char *addr_str = NULL;
     char *tmp = NULL;
     char *port_str;
-    long port;
+    int port;
     char *endptr;
 
     /* only create if list is initialized to NULL */
@@ -249,7 +249,7 @@ static int buf_to_addr_port_list(struct sssd_ctx *ctx,
                 }
 
                 if (port < 0 || port > 65535) {
-                    PLUGIN_DEBUG("Illegal port number [%ld], assuming "
+                    PLUGIN_DEBUG("Illegal port number [%d], assuming "
                                  "default.\n", port);
                     port = 0;
                 }
