@@ -178,6 +178,9 @@ static void debug_fflush(void)
     fflush(debug_file ? debug_file : stderr);
 }
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 1, 0)))
+#endif
 static void debug_vprintf(const char *format, va_list ap)
 {
     vfprintf(debug_file ? debug_file : stderr, format, ap);
@@ -260,6 +263,9 @@ journal_done:
 }
 #endif /* WiTH_JOURNALD */
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 6, 0)))
+#endif
 void sss_vdebug_fn(const char *file,
                    long line,
                    const char *function,
@@ -339,6 +345,9 @@ void sss_debug_fn(const char *file,
     va_end(ap);
 }
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 3, 0)))
+#endif
 void ldb_debug_messages(void *context, enum ldb_debug_level level,
                         const char *fmt, va_list ap)
 {

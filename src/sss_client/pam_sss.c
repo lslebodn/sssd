@@ -80,6 +80,9 @@
 #define MAX_AUTHTOK_SIZE (1024*1024)
 #define CHECK_AND_RETURN_PI_STRING(s) ((s != NULL && *s != '\0')? s : "(not available)")
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 3, 4)))
+#endif
 static void logger(pam_handle_t *pamh, int level, const char *fmt, ...) {
     va_list ap;
 

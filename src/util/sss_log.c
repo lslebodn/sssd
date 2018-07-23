@@ -115,6 +115,9 @@ static void sss_log_internal(int priority, int facility, const char *format,
 
 #else /* WITH_JOURNALD */
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 3, 0)))
+#endif
 static void sss_log_internal(int priority, int facility, const char *format,
                             va_list ap)
 {

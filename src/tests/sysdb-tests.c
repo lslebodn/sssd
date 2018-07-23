@@ -229,6 +229,9 @@ static struct test_data *test_data_new(struct sysdb_test_ctx *test_ctx)
     return data;
 }
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 3, 4)))
+#endif
 static char *test_asprintf_fqname(TALLOC_CTX *mem_ctx,
                                   struct sss_domain_info *dom,
                                   const char *fmt,

@@ -199,6 +199,9 @@ int sbus_request_fail_and_finish(struct sbus_request *dbus_req,
     return ret;
 }
 
+#ifdef HAVE_FUNCTION_ATTRIBUTE_FORMAT
+__attribute__((format(printf, 3, 0)))
+#endif
 static DBusError *sbus_error_new_va(TALLOC_CTX *mem_ctx,
                                     const char *error_name,
                                     const char *fmt,
