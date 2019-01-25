@@ -31,3 +31,30 @@ def test_missing_domains():
 
     ret = subprocess.call(["sss_cache", "-E"])
     assert ret == 0
+
+
+def test_nothing_cache():
+    # Ansure we do not fail in case there are not any entries to invalidate
+    ret = subprocess.call(["sssd", "--genconf"])
+    assert ret == 0
+
+    ret = subprocess.call(["sss_cache", "-U"])
+    assert ret == 0
+
+    ret = subprocess.call(["sss_cache", "-G"])
+    assert ret == 0
+
+    ret = subprocess.call(["sss_cache", "-E"])
+    assert ret == 0
+
+
+def test_invalidate_missing_specific_entry():
+    # Ansure we will fail when invalidatin missing specific entry
+    ret = subprocess.call(["sssd", "--genconf"])
+    assert ret == 0
+
+    ret = subprocess.call(["sss_cache", "-u", "non-existing"])
+    assert ret == 2
+
+    ret = subprocess.call(["sss_cache", "-g", "non-existing"])
+    assert ret == 2
